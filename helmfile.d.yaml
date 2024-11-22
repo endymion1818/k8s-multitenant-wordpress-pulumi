@@ -1,0 +1,14 @@
+repositories:
+  - name: kuma
+    url: https://kumahq.github.io/charts
+
+releases:
+  - name: kuma
+    namespace: kuma-system
+    chart: kuma/kuma
+    version: 2.0.1 # Replace with the desired version
+    values:
+      - controlPlane:
+          mode: standalone
+      - dataPlane:
+          envoyAdminPort: 30001

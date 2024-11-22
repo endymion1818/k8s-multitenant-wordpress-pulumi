@@ -1,0 +1,3 @@
+name: k8s-multitenant-wordpress
+runtime: nodejs
+description: A Pulumi project to set up a multi-tenant Kubernetes cluster with Kuma
