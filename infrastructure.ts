@@ -1,6 +1,14 @@
 import * as k8s from "@pulumi/kubernetes";
 import * as linode from "@pulumi/linode";
+import * as pulumi from "@pulumi/pulumi";
 
+// Initialize Pulumi Config
+const config = new pulumi.Config();
+const targetProvider = config.require("provider");
+
+if (targetProvider !== "minikube" && targetProvider !== "linode") {
+    throw new Error('Provider must be either "minikube" or "linode"');
+}
 // Interface for tenant configuration
 interface TenantConfig {
     name: string;
@@ -12,34 +20,44 @@ interface TenantConfig {
     };  
 }
 
-// Create a Linode Kubernetes Engine (LKE) cluster
-const cluster = new linode.LkeCluster("multi-tenant-cluster", {
-    label: "multi-tenant-cluster",
-    k8sVersion: "1.28",
-    region: "us-east",
-    pools: [{
-        type: "g6-standard-2",
-        count: 3,
-        autoscaler: {
-            min: 3,
-            max: 5,
+// Cluster and provider configuration based on selected provider
+let k8sProvider: k8s.Provider;
+let clusterKubeconfig: pulumi.Output<string> | undefined;
+
+if (targetProvider === "linode") {
+    // Create a Linode Kubernetes Engine (LKE) cluster
+    const cluster = new linode.LkeCluster("multi-tenant-cluster", {
+        label: "multi-tenant-cluster",
+        k8sVersion: "1.28",
+        region: "us-east",
+        pools: [{
+            type: "g6-standard-2",
+            count: 3,
+            autoscaler: {
+                min: 3,
+                max: 5,
+            },
+        }],
+        controlPlane: {
+            highAvailability: true,
         },
-    }],
-    controlPlane: {
-        highAvailability: true,
-    },
-    tags: ["production", "multi-tenant"],
-});
+        tags: ["production", "multi-tenant"],
+    });
 
-// Configure Kubernetes provider
-const kubeconfig = cluster.kubeconfig.apply(config => {
-    if (!config) throw new Error("Failed to get kubeconfig");
-    return config;
-});
+    const kubeconfig = cluster.kubeconfig.apply(config => {
+        if (!config) throw new Error("Failed to get kubeconfig");
+        return config;
+    });
 
-const provider = new k8s.Provider("k8s-provider", {
-    kubeconfig,
-});
+    k8sProvider = new k8s.Provider("k8s-provider", {
+        kubeconfig,
+    });
+
+    clusterKubeconfig = cluster.kubeconfig;
+} else {
+    // Use local minikube configuration
+    k8sProvider = new k8s.Provider("k8s-provider", {});
+}
 
 // Define tenant configurations
 const tenants: TenantConfig[] = [
@@ -63,7 +81,7 @@ tenants.forEach(tenant => {
             name: tenant.name,
             labels: tenant.namespaceLabels,
         },
-    }, { provider });
+    }, { provider: k8sProvider });
 
     // Create ResourceQuota
     const quota = new k8s.core.v1.ResourceQuota(`${tenant.name}-quota`, {
@@ -77,7 +95,7 @@ tenants.forEach(tenant => {
                 pods: tenant.resourceQuotas?.pods ?? "0",
             },
         },
-    }, { provider, dependsOn: namespace });
+    }, { provider: k8sProvider, dependsOn: namespace });
 
     // Create LimitRange for containers
     const limitRange = new k8s.core.v1.LimitRange(`${tenant.name}-limits`, {
@@ -105,7 +123,7 @@ tenants.forEach(tenant => {
                 },
             }],
         },
-    }, { provider, dependsOn: namespace });
+    }, { provider: k8sProvider, dependsOn: namespace });
 
     // Create ClusterRole for tenant
     const role = new k8s.rbac.v1.ClusterRole(`${tenant.name}-role`, {
@@ -134,7 +152,7 @@ tenants.forEach(tenant => {
                 verbs: ["get", "list", "watch"],
             },
         ],
-    }, { provider });
+    }, { provider: k8sProvider, dependsOn: namespace });
 
     // Create RoleBinding for tenant
     const roleBinding = new k8s.rbac.v1.RoleBinding(`${tenant.name}-rolebinding`, {
@@ -151,7 +169,7 @@ tenants.forEach(tenant => {
             name: `${tenant.name}-users`,
             apiGroup: "rbac.authorization.k8s.io",
         }],
-    }, { provider, dependsOn: [namespace, role] });
+    }, { provider: k8sProvider, dependsOn: [namespace, role] });
 
     // Create NetworkPolicy
     const networkPolicy = new k8s.networking.v1.NetworkPolicy(`${tenant.name}-netpol`, {
@@ -219,7 +237,7 @@ tenants.forEach(tenant => {
                 },
             ],
         },
-    }, { provider, dependsOn: namespace });
+    }, { provider: k8sProvider, dependsOn: namespace });
 });
 
 // Create Kuma namespace
@@ -230,7 +248,7 @@ const kumaNamespace = new k8s.core.v1.Namespace("kuma-system", {
             "kuma.io/system": "true",
         },
     },
-}, { provider });
+}, { provider: k8sProvider });
 
 // Install Kuma using Helm
 const kumaRelease = new k8s.helm.v3.Release("kuma", {
@@ -243,9 +261,9 @@ const kumaRelease = new k8s.helm.v3.Release("kuma", {
     values: {
         controlPlane: {
             autoscaling: {
-                enabled: true,
-                minReplicas: 2,
-                maxReplicas: 5,
+                enabled: targetProvider === "linode",
+                minReplicas: targetProvider === "linode" ? 2 : 1,
+                maxReplicas: targetProvider === "linode" ? 5 : 1,
             },
             resources: {
                 requests: {
@@ -271,7 +289,7 @@ const kumaRelease = new k8s.helm.v3.Release("kuma", {
             enabled: true,
         },
     },
-}, { provider, dependsOn: kumaNamespace });
+}, { provider: k8sProvider, dependsOn: kumaNamespace });
 
 // Create Kuma mesh policies for each tenant
 tenants.forEach(tenant => {
@@ -297,8 +315,8 @@ tenants.forEach(tenant => {
                 },
             }],
         },
-    }, { provider, dependsOn: [kumaRelease] });
+    }, { provider: k8sProvider, dependsOn: [kumaRelease] });
 });
 
-// Export the kubeconfig to access your cluster
-export const clusterKubeconfig = cluster.kubeconfig;
+// Export the kubeconfig for Linode cluster only
+export const kubeconfig = clusterKubeconfig;
