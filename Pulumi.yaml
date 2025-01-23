@@ -1,3 +1,14 @@
 name: k8s-multitenant-wordpress
-runtime: nodejs
-description: A Pulumi project to set up a multi-tenant Kubernetes cluster with Kuma
+runtime:
+  name: nodejs
+  options:
+    version: 20.11.1
+description: A Pulumi infrastructure project that provisions a multi-tenant Kubernetes cluster with service mesh capabilities using Kuma. This setup enables isolated WordPress deployments for multiple tenants with proper network policies, RBAC, and service mesh boundary controls.
+template:
+  config:
+    aws:region:
+      description: The AWS region to deploy into
+      default: us-west-2
+    linode:token:
+      description: The Linode API token
+      secret: true

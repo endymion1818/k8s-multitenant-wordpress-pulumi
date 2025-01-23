@@ -1,16 +1,31 @@
 {
-  "name": "k8s-multitenant-wordpress-pulumi",
-  "version": "1.0.0",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
-  "dependencies": {
-    "@pulumi/kubernetes": "^4.18.3",
-    "@pulumi/linode": "^4.30.0"
-  }
+"name": "k8s-multitenant-wordpress-pulumi",
+"version": "1.0.0",
+"main": "index.js",
+"type": "module",
+"scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "lint": "eslint . --ext .ts",
+    "lint:fix": "eslint . --ext .ts --fix",
+    "up": "pulumi up",
+    "down": "pulumi destroy",
+    "preview": "pulumi preview"
+},
+"keywords": ["pulumi", "kubernetes", "wordpress", "multi-tenant"],
+"author": "",
+"license": "ISC",
+"description": "A Pulumi project for deploying multi-tenant WordPress installations on Kubernetes with proper isolation and security",
+"dependencies": {
+    "@pulumi/kubernetes": "^4.21.0",
+    "@pulumi/linode": "^4.31.0",
+    "@pulumi/pulumi": "^3.147.0"
+},
+"devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.4.0"
+}
 }
