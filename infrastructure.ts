@@ -9,7 +9,7 @@ interface TenantConfig {
         cpu: string;
         memory: string;
         pods: string;
-    };
+    };  
 }
 
 // Create a Linode Kubernetes Engine (LKE) cluster
@@ -72,9 +72,9 @@ tenants.forEach(tenant => {
         },
         spec: {
             hard: {
-                "limits.cpu": tenant.resourceQuotas?.cpu,
-                "limits.memory": tenant.resourceQuotas?.memory,
-                pods: tenant.resourceQuotas?.pods,
+                "limits.cpu": tenant.resourceQuotas?.cpu ?? "0",
+                "limits.memory": tenant.resourceQuotas?.memory ?? "0",
+                pods: tenant.resourceQuotas?.pods ?? "0",
             },
         },
     }, { provider, dependsOn: namespace });
